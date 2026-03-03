@@ -1,22 +1,27 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { RotateCw, Settings } from 'lucide-react';
 import type { Video } from '../types';
+import CloudflarePlayer from './CloudflarePlayer';
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
 export default function PlayerContainer({ video }: { video: Video }) {
-  const videoRef = useRef<HTMLVideoElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [rotation, setRotation] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
 
+  const getVideoElement = useCallback(
+    () => containerRef.current?.querySelector('video') ?? null,
+    [],
+  );
+
   useEffect(() => {
     setRotation(0);
     setPlaybackRate(1);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = 1;
-    }
-  }, [video]);
+    const el = getVideoElement();
+    if (el) el.playbackRate = 1;
+  }, [video, getVideoElement]);
 
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
@@ -24,9 +29,8 @@ export default function PlayerContainer({ video }: { video: Video }) {
 
   const handlePlaybackRateChange = (rate: number) => {
     setPlaybackRate(rate);
-    if (videoRef.current) {
-      videoRef.current.playbackRate = rate;
-    }
+    const el = getVideoElement();
+    if (el) el.playbackRate = rate;
     setShowSettings(false);
   };
 
@@ -35,25 +39,12 @@ export default function PlayerContainer({ video }: { video: Video }) {
   return (
     <div className="flex flex-col gap-2">
       <div className={`w-full bg-black rounded-2xl overflow-hidden relative border border-white/10 shadow-lg flex items-center justify-center transition-all duration-300 ${isVertical ? 'aspect-[9/16] max-h-[80vh] mx-auto' : 'aspect-video'}`}>
-        {/*
-          Cloudflare Stream 预留位置
-          <stream src={video.stream_id} controls preload></stream>
-          <script data-cfasync="false" defer type="text/javascript" src="https://embed.videodelivery.net/embed/r4.core.js"></script>
-        */}
         <div
+          ref={containerRef}
           className="w-full h-full flex items-center justify-center transition-transform duration-300"
           style={{ transform: `rotate(${rotation}deg)` }}
         >
-          <video
-            ref={videoRef}
-            src={video.videoUrl}
-            poster={video.thumbnail}
-            controls
-            className="w-full h-full object-contain"
-            autoPlay
-          >
-            Your browser does not support the video tag.
-          </video>
+          <CloudflarePlayer video={video} />
         </div>
       </div>
 

@@ -1,0 +1,11 @@
+name = "streamflix-api"
+main = "src/server/index.ts"
+compatibility_date = "2024-12-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "streamflix_db"
+database_id = "local-dev-placeholder"
+# ↑ 本地开发时此 ID 为占位符，wrangler dev 会自动创建本地 SQLite 文件
+# ↑ 部署到云端前，请用 `npx wrangler d1 create streamflix_db` 创建真实数据库，
+#   然后将返回的 database_id 填入此处
