@@ -1,0 +1,5 @@
+{
+  "name": "StreamFlix - Modern Video Platform",
+  "description": "A modern video platform prototype with responsive grid, video player, and upload modal, ready for Cloudflare Pages and Stream integration.",
+  "requestFramePermissions": []
+}
