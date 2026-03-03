@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Home, TrendingUp, Heart, Menu, Upload, Search, X, Play, MoreVertical, RotateCw, Settings } from 'lucide-react';
+import { Home, TrendingUp, Heart, Menu, Upload, Search, X, Play, MoreVertical, RotateCw, Settings, Film } from 'lucide-react';
 import { MOCK_VIDEOS, Video } from './data';
 
 // Helper to format duration
@@ -19,25 +19,37 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Simulate network loading
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, []);
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#050505] text-white font-sans">
       <Sidebar isOpen={isSidebarOpen} />
       
-      <div className="flex-1 flex flex-col h-full overflow-hidden">
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
         <Navbar 
           toggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)} 
           onUploadClick={() => setIsUploadModalOpen(true)}
           onHomeClick={() => setCurrentVideo(null)}
         />
         
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20 sm:pb-6">
           {currentVideo ? (
             <VideoDetail video={currentVideo} onVideoSelect={setCurrentVideo} />
           ) : (
-            <VideoGrid videos={MOCK_VIDEOS} onVideoSelect={setCurrentVideo} />
+            isLoading ? <VideoGridSkeleton /> : <VideoGrid videos={MOCK_VIDEOS} onVideoSelect={setCurrentVideo} />
           )}
         </main>
+        
+        {/* Mobile Bottom Navigation */}
+        <MobileNav isOpen={isSidebarOpen} />
       </div>
 
       {isUploadModalOpen && (
@@ -59,6 +71,25 @@ function Sidebar({ isOpen }: { isOpen: boolean }) {
   );
 }
 
+function MobileNav({ isOpen }: { isOpen: boolean }) {
+  return (
+    <div className="sm:hidden fixed bottom-0 left-0 right-0 h-16 bg-[#050505]/80 backdrop-blur-xl border-t border-white/10 flex items-center justify-around px-4 z-20">
+      <button className="flex flex-col items-center gap-1 text-white">
+        <Home size={20} />
+        <span className="text-[10px] font-medium">首页</span>
+      </button>
+      <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+        <TrendingUp size={20} />
+        <span className="text-[10px] font-medium">热门</span>
+      </button>
+      <button className="flex flex-col items-center gap-1 text-gray-400 hover:text-white transition-colors">
+        <Heart size={20} />
+        <span className="text-[10px] font-medium">收藏</span>
+      </button>
+    </div>
+  );
+}
+
 function SidebarItem({ icon, label, isOpen, active }: { icon: React.ReactNode, label: string, isOpen: boolean, active?: boolean }) {
   return (
     <button className={`flex items-center gap-4 p-3 rounded-xl transition-colors ${active ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'}`}>
@@ -70,7 +101,7 @@ function SidebarItem({ icon, label, isOpen, active }: { icon: React.ReactNode, l
 
 function Navbar({ toggleSidebar, onUploadClick, onHomeClick }: { toggleSidebar: () => void, onUploadClick: () => void, onHomeClick: () => void }) {
   return (
-    <header className="h-16 flex items-center justify-between px-4 border-b border-white/10 bg-[#050505]/80 backdrop-blur-md sticky top-0 z-10">
+    <header className="h-16 flex items-center justify-between px-4 border-b border-white/10 bg-[#050505]/50 backdrop-blur-xl sticky top-0 z-10 transition-all">
       <div className="flex items-center gap-4">
         <button onClick={toggleSidebar} className="p-2 rounded-full hover:bg-white/10 transition-colors text-gray-300 hidden sm:block">
           <Menu size={24} />
@@ -91,7 +122,7 @@ function Navbar({ toggleSidebar, onUploadClick, onHomeClick }: { toggleSidebar: 
           <input 
             type="text" 
             placeholder="搜索视频..." 
-            className="w-full bg-[#121212] border border-white/10 text-white rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-white/30 focus:bg-[#1a1a1a] transition-all"
+            className="w-full bg-[#121212]/80 border border-white/10 text-white rounded-full py-2 pl-10 pr-4 focus:outline-none focus:border-white/30 focus:bg-[#1a1a1a] transition-all"
           />
         </div>
       </div>
@@ -106,9 +137,29 @@ function Navbar({ toggleSidebar, onUploadClick, onHomeClick }: { toggleSidebar: 
   );
 }
 
+function VideoGridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8">
+      {Array.from({ length: 10 }).map((_, i) => (
+        <div key={i} className="flex flex-col gap-3 animate-pulse">
+          <div className="aspect-video rounded-xl bg-white/5 border border-white/5"></div>
+          <div className="flex gap-3 px-1">
+            <div className="w-9 h-9 rounded-full bg-white/5 flex-shrink-0 mt-1"></div>
+            <div className="flex flex-col gap-2 w-full mt-1">
+              <div className="h-4 bg-white/5 rounded w-full"></div>
+              <div className="h-4 bg-white/5 rounded w-3/4"></div>
+              <div className="h-3 bg-white/5 rounded w-1/2 mt-1"></div>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function VideoGrid({ videos, onVideoSelect }: { videos: Video[], onVideoSelect: (v: Video) => void }) {
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 gap-y-8">
+    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8">
       {videos.map(video => (
         <VideoCard key={video.id} video={video} onClick={() => onVideoSelect(video)} />
       ))}
@@ -131,11 +182,13 @@ function VideoCard({ video, onClick }: { video: Video, onClick: () => void, key?
         </div>
       </div>
       <div className="flex gap-3 px-1">
-        <div className="w-9 h-9 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex-shrink-0 mt-1"></div>
+        <div className="w-9 h-9 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+          <Film size={16} className="text-gray-400" />
+        </div>
         <div className="flex flex-col overflow-hidden">
-          <h3 className="font-medium text-white line-clamp-2 leading-tight group-hover:text-blue-400 transition-colors">{video.title}</h3>
-          <p className="text-sm text-gray-400 mt-1">{video.author}</p>
-          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+          <h3 className="font-medium text-sm text-white line-clamp-2 leading-snug group-hover:text-gray-300 transition-colors">{video.title}</h3>
+          <p className="text-xs text-gray-400 mt-1">{video.author}</p>
+          <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
             <span>{video.views?.toLocaleString()} 观看</span>
             <span>•</span>
             <span>{formatDate(video.created_at)}</span>
@@ -143,7 +196,7 @@ function VideoCard({ video, onClick }: { video: Video, onClick: () => void, key?
         </div>
         <div className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
           <button className="p-1 text-gray-400 hover:text-white rounded-full hover:bg-white/10">
-            <MoreVertical size={18} />
+            <MoreVertical size={16} />
           </button>
         </div>
       </div>
@@ -163,7 +216,9 @@ function VideoDetail({ video, onVideoSelect }: { video: Video, onVideoSelect: (v
           <h1 className="text-2xl font-bold text-white">{video.title}</h1>
           <div className="flex flex-wrap items-center justify-between border-b border-white/10 pb-4 gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-500 flex-shrink-0"></div>
+              <div className="w-10 h-10 rounded-full bg-[#1a1a1a] border border-white/10 flex items-center justify-center flex-shrink-0">
+                <Film size={20} className="text-gray-400" />
+              </div>
               <div>
                 <div className="font-medium text-white">{video.author}</div>
                 <div className="text-xs text-gray-400">1.2M 订阅者</div>
