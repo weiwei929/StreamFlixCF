@@ -217,3 +217,37 @@ curl https://streamflix-api.pennfly2008.workers.dev/audit
 | 🟡 | 分页 / 无限滚动 |
 | 🟡 | `DELETE /videos/:id` 接口 |
 | 🟢 | 路由系统（URL 可分享） |
+
+---
+
+## ⚠️ 故障记录：`.wrangler/` 污染 git 历史导致 push 失败
+
+**现象**：`git push` 失败，错误涉及 GitHub LFS / storage，推送体积异常高达 65MB+。
+
+**根因**：
+- `wrangler dev` 本地运行时会在 `.wrangler/state/v3/r2/` 下生成 **大量二进制 blob 文件**（本地 R2 模拟数据）
+- `.gitignore` 中虽有 `.wrangler/` 规则，但该目录在 **gitignore 规则生效之前** 已被某次 commit 追踪进 git 历史
+- 此后即便 `.gitignore` 生效，git 仍会持续追踪这些文件，并在后续 commit 中记录它们的变化
+- 多个 session 积累后，未推送的 commit 中包含了数十 MB 的 wrangler 二进制对象，被 GitHub 拒绝
+
+**解决方式**：
+
+```bash
+# 1. 软重置到远程最新 commit（保留所有代码改动在暂存区）
+git reset --soft origin/main
+
+# 2. 确认暂存区没有 .wrangler 文件
+git status --short | Select-String "wrangler"  # 只应出现 workers/wrangler.toml
+
+# 3. 重新提交（干净 commit，不含 .wrangler/）
+git add -A
+git commit -m "..."
+
+# 4. 推送
+git push origin main --tags
+```
+
+**预防措施**：
+- 确保 `.gitignore` 中有 `.wrangler/`（已有）
+- 若已意外追踪，立即执行：`git rm -r --cached .wrangler/` 并 commit 清理
+- 本地运行 `wrangler dev` 前不要执行 `git add -A`，或用 `git status` 确认后再 add
