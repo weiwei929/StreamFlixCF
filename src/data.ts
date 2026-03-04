@@ -11,6 +11,27 @@ export interface Video {
   author?: string;
 }
 
+const API_URL = import.meta.env.VITE_API_URL || 'https://streamflix-api.pennfly2008.workers.dev';
+
+export async function fetchVideos(): Promise<Video[]> {
+  const res = await fetch(`${API_URL}/videos`);
+  if (!res.ok) throw new Error('Failed to fetch videos');
+  const data = await res.json();
+  return (data.videos || []).map((v: Video) => ({
+    ...v,
+    created_at: v.created_at?.replace(' ', 'T') || v.created_at,
+  }));
+}
+
+export async function patchVideo(id: string, fields: Partial<Pick<Video, 'title' | 'thumbnail' | 'duration' | 'description' | 'views' | 'author'>>): Promise<void> {
+  await fetch(`${API_URL}/videos/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(fields),
+  });
+}
+
+/** @deprecated 使用 fetchVideos 从 API 获取，仅作开发回退 */
 export const MOCK_VIDEOS: Video[] = [
   {
     id: "1",

@@ -1,0 +1,20 @@
+name = "streamflix-api"
+main = "src/index.ts"
+compatibility_date = "2024-01-01"
+
+# [triggers]
+# crons = ["0 * * * *"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "streamflix-db"
+database_id = "b56c85ef-4bdb-4993-9f2d-6a83cf116b90"
+
+[[r2_buckets]]
+binding = "R2"
+bucket_name = "pf2008"
+
+# [[queues.consumers]]
+# queue = "streamflix-r2-events"
+# max_batch_size = 10
+# max_batch_timeout = 30

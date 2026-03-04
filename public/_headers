@@ -1,0 +1,4 @@
+# Cloudflare Pages 响应头
+# 确保 index.html 不被强缓存，部署后用户能获取新版本
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate

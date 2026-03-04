@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Home, TrendingUp, Heart, Menu, Upload, Search, X, Play, MoreVertical, RotateCw, Settings, Film } from 'lucide-react';
-import { MOCK_VIDEOS, Video } from './data';
+import { Home, TrendingUp, Heart, Menu, Upload, Search, X, Play, MoreVertical, RotateCw, Settings, Film, ChevronRight } from 'lucide-react';
+import { fetchVideos, MOCK_VIDEOS, Video } from './data';
+
 
 // Helper to format duration
 const formatDuration = (seconds: number) => {
@@ -15,18 +16,37 @@ const formatDate = (dateString: string) => {
   return date.toLocaleDateString();
 };
 
+// Extract folder path from video URL, e.g.
+//   https://disk.f2008.cf/video/shows/abc.mp4  →  video/shows
+//   https://disk.f2008.cf/video/abc.mp4         →  video
+const getVideoPath = (video: { videoUrl: string; author?: string }) => {
+  try {
+    const { pathname } = new URL(video.videoUrl);
+    const parts = pathname.split('/').filter(Boolean); // remove empty segments
+    // Drop the filename (last part), keep the folder(s)
+    parts.pop();
+    return parts.length ? parts.join('/') : (video.author ?? 'R2');
+  } catch {
+    return video.author ?? 'R2';
+  }
+};
+
 export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [currentVideo, setCurrentVideo] = useState<Video | null>(null);
   const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [videos, setVideos] = useState<Video[]>([]);
+  const [error, setError] = useState<string | null>(null);
 
-  // Simulate network loading
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoading(false);
-    }, 1500);
-    return () => clearTimeout(timer);
+    fetchVideos()
+      .then(setVideos)
+      .catch((e) => {
+        setError(e.message);
+        setVideos(MOCK_VIDEOS);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   return (
@@ -42,9 +62,9 @@ export default function App() {
         
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 pb-20 sm:pb-6">
           {currentVideo ? (
-            <VideoDetail video={currentVideo} onVideoSelect={setCurrentVideo} />
+            <VideoDetail video={currentVideo} onVideoSelect={setCurrentVideo} recommendedVideos={videos.filter((v) => v.id !== currentVideo.id)} />
           ) : (
-            isLoading ? <VideoGridSkeleton /> : <VideoGrid videos={MOCK_VIDEOS} onVideoSelect={setCurrentVideo} />
+            isLoading ? <VideoGridSkeleton /> : <VideoGrid videos={videos} onVideoSelect={setCurrentVideo} />
           )}
         </main>
         
@@ -158,27 +178,85 @@ function VideoGridSkeleton() {
 }
 
 function VideoGrid({ videos, onVideoSelect }: { videos: Video[], onVideoSelect: (v: Video) => void }) {
+  // Track which folders are expanded; default: all collapsed
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggle = (path: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev);
+      next.has(path) ? next.delete(path) : next.add(path);
+      return next;
+    });
+
+  // Group videos by folder path
+  const groups = videos.reduce<Record<string, Video[]>>((acc, video) => {
+    const path = getVideoPath(video);
+    if (!acc[path]) acc[path] = [];
+    acc[path].push(video);
+    return acc;
+  }, {});
+
+  // Sort: root folder first (fewer slashes), then alphabetically
+  const sortedPaths = Object.keys(groups).sort((a, b) => {
+    const depthA = a.split('/').length;
+    const depthB = b.split('/').length;
+    if (depthA !== depthB) return depthA - depthB;
+    return a.localeCompare(b);
+  });
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8">
-      {videos.map(video => (
-        <VideoCard key={video.id} video={video} onClick={() => onVideoSelect(video)} />
-      ))}
+    <div className="flex flex-col gap-4">
+      {sortedPaths.map(path => {
+        const isOpen = expanded.has(path);
+        return (
+          <section key={path}>
+            {/* Folder header — clickable to toggle */}
+            <button
+              onClick={() => toggle(path)}
+              className="w-full flex items-center gap-2 py-2 px-1 border-b border-white/10 hover:bg-white/5 rounded-lg transition-colors group"
+            >
+              <ChevronRight
+                size={16}
+                className={`text-gray-400 transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`}
+              />
+              <span className="text-lg">📁</span>
+              <h2 className="text-sm font-semibold text-gray-300 tracking-wide">{path}</h2>
+              <span className="text-xs text-gray-600 ml-1">({groups[path].length})</span>
+            </button>
+            {/* Video grid — visible only when expanded */}
+            {isOpen && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5 gap-x-4 gap-y-8 mt-4">
+                {groups[path].map(video => (
+                  <VideoCard key={video.id} video={video} onClick={() => onVideoSelect(video)} />
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })}
     </div>
   );
 }
 
 function VideoCard({ video, onClick }: { video: Video, onClick: () => void, key?: React.Key }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [realDuration, setRealDuration] = useState(video.duration);
   return (
     <div className="group cursor-pointer flex flex-col gap-3" onClick={onClick}>
       <div className="relative aspect-video rounded-xl overflow-hidden border border-white/5 bg-[#121212]">
-        <img 
-          src={video.thumbnail} 
-          alt={video.title} 
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          referrerPolicy="no-referrer"
+        <video
+          ref={videoRef}
+          src={video.videoUrl}
+          muted
+          preload="metadata"
+          playsInline
+          onLoadedMetadata={() => {
+            if (videoRef.current?.duration) setRealDuration(videoRef.current.duration);
+          }}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
         />
         <div className="absolute bottom-2 right-2 bg-black/80 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md font-mono">
-          {formatDuration(video.duration)}
+          {formatDuration(realDuration)}
         </div>
       </div>
       <div className="flex gap-3 px-1">
@@ -187,7 +265,7 @@ function VideoCard({ video, onClick }: { video: Video, onClick: () => void, key?
         </div>
         <div className="flex flex-col overflow-hidden">
           <h3 className="font-medium text-sm text-white line-clamp-2 leading-snug group-hover:text-gray-300 transition-colors">{video.title}</h3>
-          <p className="text-xs text-gray-400 mt-1">{video.author}</p>
+          <p className="text-xs text-gray-400 mt-1">{getVideoPath(video)}</p>
           <div className="text-[11px] text-gray-500 flex items-center gap-1 mt-0.5">
             <span>{video.views?.toLocaleString()} 观看</span>
             <span>•</span>
@@ -204,8 +282,7 @@ function VideoCard({ video, onClick }: { video: Video, onClick: () => void, key?
   );
 }
 
-function VideoDetail({ video, onVideoSelect }: { video: Video, onVideoSelect: (v: Video) => void }) {
-  const recommendedVideos = MOCK_VIDEOS.filter(v => v.id !== video.id);
+function VideoDetail({ video, onVideoSelect, recommendedVideos }: { video: Video; onVideoSelect: (v: Video) => void; recommendedVideos: Video[] }) {
 
   return (
     <div className="flex flex-col lg:flex-row gap-6 max-w-[1600px] mx-auto">
@@ -220,7 +297,7 @@ function VideoDetail({ video, onVideoSelect }: { video: Video, onVideoSelect: (v
                 <Film size={20} className="text-gray-400" />
               </div>
               <div>
-                <div className="font-medium text-white">{video.author}</div>
+                <div className="font-medium text-white">{getVideoPath(video)}</div>
                 <div className="text-xs text-gray-400">1.2M 订阅者</div>
               </div>
               <button className="ml-2 sm:ml-4 bg-white text-black px-4 py-2 rounded-full font-medium text-sm hover:bg-gray-200 transition-colors">
@@ -252,26 +329,39 @@ function VideoDetail({ video, onVideoSelect }: { video: Video, onVideoSelect: (v
         <h3 className="font-medium text-lg px-1">推荐视频</h3>
         <div className="flex flex-col gap-3">
           {recommendedVideos.map(v => (
-            <div key={v.id} className="flex gap-3 group cursor-pointer" onClick={() => onVideoSelect(v)}>
-              <div className="relative w-40 aspect-video rounded-lg overflow-hidden border border-white/5 bg-[#121212] flex-shrink-0">
-                <img 
-                  src={v.thumbnail} 
-                  alt={v.title} 
-                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                  referrerPolicy="no-referrer"
-                />
-                <div className="absolute bottom-1 right-1 bg-black/80 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded font-mono">
-                  {formatDuration(v.duration)}
-                </div>
-              </div>
-              <div className="flex flex-col py-1">
-                <h4 className="font-medium text-sm text-white line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors">{v.title}</h4>
-                <p className="text-xs text-gray-400 mt-1">{v.author}</p>
-                <p className="text-xs text-gray-500 mt-0.5">{v.views?.toLocaleString()} 观看</p>
-              </div>
-            </div>
+            <RecommendedItem key={v.id} video={v} onSelect={onVideoSelect} />
           ))}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function RecommendedItem({ video, onSelect }: { video: Video; onSelect: (v: Video) => void; key?: React.Key }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [realDuration, setRealDuration] = useState(video.duration);
+  return (
+    <div className="flex gap-3 group cursor-pointer" onClick={() => onSelect(video)}>
+      <div className="relative w-40 aspect-video rounded-lg overflow-hidden border border-white/5 bg-[#121212] flex-shrink-0">
+        <video
+          ref={videoRef}
+          src={video.videoUrl}
+          muted
+          preload="metadata"
+          playsInline
+          onLoadedMetadata={() => {
+            if (videoRef.current?.duration) setRealDuration(videoRef.current.duration);
+          }}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 pointer-events-none"
+        />
+        <div className="absolute bottom-1 right-1 bg-black/80 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded font-mono">
+          {formatDuration(realDuration)}
+        </div>
+      </div>
+      <div className="flex flex-col py-1">
+        <h4 className="font-medium text-sm text-white line-clamp-2 leading-snug group-hover:text-blue-400 transition-colors">{video.title}</h4>
+        <p className="text-xs text-gray-400 mt-1">{video.author}</p>
+        <p className="text-xs text-gray-500 mt-0.5">{video.views?.toLocaleString()} 观看</p>
       </div>
     </div>
   );
@@ -282,15 +372,40 @@ function PlayerContainer({ video }: { video: Video }) {
   const [rotation, setRotation] = useState(0);
   const [playbackRate, setPlaybackRate] = useState(1);
   const [showSettings, setShowSettings] = useState(false);
+  // 未激活时完全不渲染 <video> 元素，进入详情页零流量
+  const [isActivated, setIsActivated] = useState(false);
 
-  // Reset states when video changes
+  // 切换视频时：重置所有状态，并强制中止当前视频的网络加载
   useEffect(() => {
     setRotation(0);
     setPlaybackRate(1);
+    setIsActivated(false);
     if (videoRef.current) {
-      videoRef.current.playbackRate = 1;
+      videoRef.current.pause();
+      videoRef.current.src = '';
+      videoRef.current.load();
     }
-  }, [video]);
+  }, [video.id]);
+
+  // 激活后：赋 src 并开始播放
+  useEffect(() => {
+    if (!isActivated || !videoRef.current) return;
+    const el = videoRef.current;
+    el.src = video.videoUrl;
+    el.playbackRate = playbackRate;
+    el.play().catch(() => {});
+  }, [isActivated]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 组件卸载时（离开详情页）立即中止所有网络连接
+  useEffect(() => {
+    return () => {
+      if (videoRef.current) {
+        videoRef.current.pause();
+        videoRef.current.src = '';
+        videoRef.current.load();
+      }
+    };
+  }, []);
 
   const handleRotate = () => {
     setRotation((prev) => (prev + 90) % 360);
@@ -308,7 +423,7 @@ function PlayerContainer({ video }: { video: Video }) {
 
   // Calculate dynamic aspect ratio based on rotation
   const isVertical = rotation === 90 || rotation === 270;
-  
+
   return (
     <div className="flex flex-col gap-2">
       <div className={`w-full bg-black rounded-2xl overflow-hidden relative border border-white/10 shadow-lg flex items-center justify-center transition-all duration-300 ${isVertical ? 'aspect-[9/16] max-h-[80vh] mx-auto' : 'aspect-video'}`}>
@@ -321,16 +436,37 @@ function PlayerContainer({ video }: { video: Video }) {
           className="w-full h-full flex items-center justify-center transition-transform duration-300"
           style={{ transform: `rotate(${rotation}deg)` }}
         >
-          <video 
-            ref={videoRef}
-            src={video.videoUrl} 
-            poster={video.thumbnail}
-            controls 
-            className="w-full h-full object-contain"
-            autoPlay
-          >
-            Your browser does not support the video tag.
-          </video>
+          {!isActivated ? (
+            /* 封面覆层：未激活时 src 完全不存在，零流量 */
+            <button
+              onClick={() => setIsActivated(true)}
+              className="w-full h-full flex items-center justify-center relative group bg-black"
+              aria-label="播放视频"
+            >
+              <video
+                src={video.videoUrl}
+                muted
+                preload="metadata"
+                playsInline
+                className="w-full h-full object-contain pointer-events-none"
+              />
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30 group-hover:bg-black/40 transition-colors">
+                <div className="w-20 h-20 rounded-full bg-white/20 backdrop-blur-sm border border-white/30 flex items-center justify-center group-hover:bg-white/30 transition-colors">
+                  <Play size={36} fill="white" className="text-white ml-1" />
+                </div>
+              </div>
+            </button>
+          ) : (
+            /* 用户点击后才渲染视频元素，src 由 useEffect 统一管理 */
+            <video
+              ref={videoRef}
+              controls
+              className="w-full h-full object-contain"
+              preload="none"
+            >
+              Your browser does not support the video tag.
+            </video>
+          )}
         </div>
       </div>
       
