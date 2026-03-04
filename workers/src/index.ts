@@ -1,3 +1,4 @@
+/// <reference path="../worker-configuration.d.ts" />
 export interface Env {
   DB: D1Database;
   R2: R2Bucket;
@@ -145,7 +146,7 @@ export default {
         )
           .bind(limit, offset)
           .all();
-        const videos = (results || []).map((r) => addVideoUrl(videoFromRow(r as Record<string, unknown>)));
+        const videos = (results || []).map((r: Record<string, unknown>) => addVideoUrl(videoFromRow(r as Record<string, unknown>)));
         return jsonResponse({ videos });
       }
 
@@ -213,10 +214,10 @@ export default {
           cursor = listed.truncated ? listed.cursor : undefined;
         } while (cursor);
         const { results } = await env.DB.prepare("SELECT stream_id FROM videos").all();
-        const d1Urls = new Set((results || []).map((r) => String((r as Record<string, unknown>).stream_id)));
+        const d1Urls = new Set((results || []).map((r: Record<string, unknown>) => String(r.stream_id)));
         const baseUrl = BASE_URL;
         const missingInD1 = r2Keys.filter((k) => !d1Urls.has(baseUrl + k));
-        const d1FromR2 = [...d1Urls].filter((u) => u.startsWith(baseUrl + "video/"));
+        const d1FromR2 = ([...d1Urls] as string[]).filter((u) => u.startsWith(baseUrl + "video/"));
         const extraInD1 = d1FromR2.filter((u) => !r2Keys.includes(u.slice(baseUrl.length)));
         return jsonResponse({
           r2: { total: r2Keys.length, keys: r2Keys },
